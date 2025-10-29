@@ -1,0 +1,49 @@
+# ========== PYTHON ==========
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ========== DJANGO ==========
+*.log
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static/
+.DS_Store
+
+# ========== ENV & CONFIG ==========
+.env
+*.env
+.env.*
+
+# ========== MIGRATIONS (cache only) ==========
+*/migrations/__pycache__/
+*/migrations/*.pyc
+
+# ========== DOCKER ==========
+.docker/
+pgdata/
+postgres-data/
+docker-compose.override.yml
+
+# ========== DATABASE BACKUPS ==========
+*.db
+*.sql
+*.dump
+*.backup
+
+# ========== IDE / EDITOR ==========
+.vscode/
+.idea/
+*.code-workspace
+
+# ========== TESTS / CACHE ==========
+.pytest_cache/
+.coverage
+htmlcov/
+.cache/
+
+# ========== SYSTEM FILES ==========
+Thumbs.db
+.DS_Store
