@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'slipApp',
 ]
 
+AUTH_USER_MODEL = "slipApp.User"
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
