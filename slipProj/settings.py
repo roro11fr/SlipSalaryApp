@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'slipApp',
+    'rest_framework',
 ]
 
 AUTH_USER_MODEL = "slipApp.User"
