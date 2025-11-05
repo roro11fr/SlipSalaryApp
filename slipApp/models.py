@@ -130,3 +130,12 @@ class AuditFile(models.Model):
     def __str__(self) -> str:
         subject = self.employee_id or self.manager_id or "n/a"
         return f"{self.file_type} {self.file_name} (subj={subject})"
+
+
+class IdempotencyKey(models.Model):
+    key = models.CharField(max_length=128, unique=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    path = models.CharField(max_length=256)
+    request_fingerprint = models.CharField(max_length=256)
+    response_body = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

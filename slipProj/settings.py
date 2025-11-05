@@ -141,4 +141,14 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+MIDDLEWARE += ["slipApp.middleware.RequestLogMiddleware"]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {"requestlog": {"handlers": ["console"], "level": "INFO"}},
+}
