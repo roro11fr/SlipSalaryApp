@@ -47,3 +47,5 @@ htmlcov/
 # ========== SYSTEM FILES ==========
 Thumbs.db
 .DS_Store
+
+/exports/
