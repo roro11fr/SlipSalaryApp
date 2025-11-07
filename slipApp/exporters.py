@@ -1,8 +1,7 @@
+# exporters.py
+import os, csv, hashlib
 from pathlib import Path
-import csv
-import hashlib
 from django.utils.timezone import now
-from openpyxl import Workbook
 from .constants import CSV_FILENAME_PREFIX, CSV_HEADER, ENCODING_UTF8, HASH_ALGO
 from .services import get_export_dir_for, get_manager_payroll_qs, record_audit
 
@@ -13,24 +12,40 @@ def _compute_checksum(path: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
-
-def export_manager_csv(manager, period_start):
+def export_manager_csv(manager, period_start) -> dict:
     out_dir = get_export_dir_for("CSV")
-    out_dir.mkdir(parents=True, exist_ok=True)
+
+    qs = get_manager_payroll_qs(manager, period_start)
+    count = qs.count()
+
+    if count == 0:
+        return {
+            "file_path": None,
+            "file_name": None,
+            "checksum": None,
+            "count": 0,
+            "audit_id": None,
+            "created_at": now().isoformat(),
+        }
+
     filename = f"{CSV_FILENAME_PREFIX}{manager.username}_{period_start}.csv"
     fpath = out_dir / filename
-    qs = get_manager_payroll_qs(manager, period_start)
-    with open(fpath, "w", newline="", encoding=ENCODING_UTF8) as f:
-        writer = csv.writer(f)
-        writer.writerow(CSV_HEADER)
+    tmp_path = fpath.with_suffix(".tmp")
+
+    with open(tmp_path, "w", newline="", encoding=ENCODING_UTF8) as f:
+        w = csv.writer(f)
+        w.writerow(CSV_HEADER)
         for p in qs:
-            writer.writerow([
+            w.writerow([
                 f"{p.user.first_name} {p.user.last_name}",
                 str(p.paid_salary),
                 p.working_days,
                 p.vacation_days_taken,
                 str(p.bonus_total),
             ])
+
+    os.replace(tmp_path, fpath)
+
     checksum = _compute_checksum(fpath)
     audit = record_audit(
         file_type="CSV",
@@ -42,36 +57,11 @@ def export_manager_csv(manager, period_start):
         checksum=checksum,
         sent_by=manager,
     )
-    return {"path": str(fpath), "checksum": checksum, "audit_id": audit.id, "created_at": now().isoformat()}
-
-
-def export_manager_xlsx(manager, period_start):
-    out_dir = get_export_dir_for("CSV")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"salary_{manager.username}_{period_start}.xlsx"
-    fpath = out_dir / filename
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Salaries"
-    ws.append(["Employee", "SalaryToPay", "WorkingDays", "VacationDays", "Bonuses"])
-    for p in get_manager_payroll_qs(manager, period_start):
-        ws.append([
-            f"{p.user.first_name} {p.user.last_name}",
-            float(p.paid_salary),
-            p.working_days,
-            p.vacation_days_taken,
-            float(p.bonus_total),
-        ])
-    wb.save(fpath)
-    checksum = _compute_checksum(fpath)
-    audit = record_audit(
-        file_type="CSV",
-        file_path=str(fpath),
-        file_name=filename,
-        period=period_start,
-        manager=manager,
-        status="CREATED",
-        checksum=checksum,
-        sent_by=manager,
-    )
-    return {"path": str(fpath), "checksum": checksum, "audit_id": audit.id, "created_at": now().isoformat()}
+    return {
+        "file_path": str(fpath),
+        "file_name": filename,
+        "checksum": checksum,
+        "count": count,
+        "audit_id": audit.id,
+        "created_at": now().isoformat(),
+    }

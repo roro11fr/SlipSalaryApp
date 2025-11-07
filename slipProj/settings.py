@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-import environ
+import environ, os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'slipApp',
     'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+
 ]
 
 AUTH_USER_MODEL = "slipApp.User"
@@ -143,7 +146,15 @@ REST_FRAMEWORK = {
     ],
 }
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("SMTP_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("SMTP_USER")
+EMAIL_HOST_PASSWORD = os.getenv("SMTP_PASS")
+EMAIL_USE_TLS = os.getenv("SMTP_USE_TLS", "1") in ("1","true","True")
+EMAIL_USE_SSL = False
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 MIDDLEWARE += ["slipApp.middleware.RequestLogMiddleware"]
 
@@ -153,3 +164,16 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "loggers": {"requestlog": {"handlers": ["console"], "level": "INFO"}},
 }
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
+IDEMPOTENCY_KEY_TTL_HOURS = 24
+
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -75,53 +75,143 @@ def record_audit(
     )
 
 
+class _InlineInputs:
+    def __init__(self, working_days=0, vacation_days_taken=0, bonus_total=0):
+        self.working_days = int(working_days or 0)
+        self.vacation_days_taken = int(vacation_days_taken or 0)
+        self.bonus_total = Decimal(str(bonus_total or 0))
+
+
 @transaction.atomic
-def populate_paid_salary_for_manager_period(manager: User, period_start: date) -> dict:
-    qs = (
-        PayrollPeriod.objects
-        .select_related("user")
-        .filter(user__manager=manager, user__active=True, period=period_start)
-        .order_by("user_id")
+def populate_paid_salary_for_manager_period(
+    manager: User,
+    period_start: date,
+    inline_inputs: Optional[Dict[int, "_InlineInputs"]] = None,
+) -> dict:
+    inline_inputs = inline_inputs or {}
+
+    subordinates = (
+        User.objects.filter(manager=manager, active=True)
+        .order_by("id")
+        .only("id", "first_name", "last_name", "username")
     )
 
+    created = 0
     updated = 0
     skipped_no_contract = 0
+    processed = 0
     results: list[dict] = []
 
-    for p in qs:
-        inputs = SalaryInputs(
-            working_days=p.working_days,
-            vacation_days_taken=p.vacation_days_taken,
-            bonus_total=p.bonus_total,
+    for user in subordinates:
+        p = (
+            PayrollPeriod.objects
+            .filter(user=user, period=period_start)
+            .select_related("user")
+            .first()
         )
-        computed = compute_salary_for_month(p.user, period_start, inputs)
+
+        if p:
+            inputs = _InlineInputs(
+                working_days=p.working_days,
+                vacation_days_taken=p.vacation_days_taken,
+                bonus_total=p.bonus_total,
+            )
+            if user.id in inline_inputs:
+                inl = inline_inputs[user.id]
+                inputs.working_days = inl.working_days
+                inputs.vacation_days_taken = inl.vacation_days_taken
+                inputs.bonus_total = inl.bonus_total
+        else:
+            if user.id not in inline_inputs:
+                continue
+            inl = inline_inputs[user.id]
+            inputs = _InlineInputs(
+                working_days=inl.working_days,
+                vacation_days_taken=inl.vacation_days_taken,
+                bonus_total=inl.bonus_total,
+            )
+
+        computed = compute_salary_for_month(user, period_start, inputs)
         if computed is None:
             skipped_no_contract += 1
-            results.append({"user_id": p.user_id, "status": "no_active_contract"})
+            results.append({"user_id": user.id, "status": "no_active_contract"})
+            processed += 1
             continue
 
-        if p.paid_salary != computed:
-            p.paid_salary = computed
-            p.full_clean()
-            p.save(update_fields=["paid_salary", "updated_at"])
-            updated += 1
+        if computed == _q2(0):
+            results.append({"user_id": user.id, "status": "zero_amount"})
+            processed += 1
+            continue
 
-        results.append({"user_id": p.user_id, "status": "ok", "paid_salary": str(computed)})
+        if p is None:
+            p = PayrollPeriod(
+                user=user,
+                period=period_start,
+                working_days=inputs.working_days,
+                vacation_days_taken=inputs.vacation_days_taken,
+                bonus_total=inputs.bonus_total,
+                paid_salary=computed,
+            )
+            p.full_clean()
+            p.save()
+            created += 1
+            results.append({
+                "user_id": user.id,
+                "status": "created",
+                "paid_salary": str(computed)
+            })
+        else:
+            changed_fields = []
+            if p.working_days != inputs.working_days:
+                p.working_days = inputs.working_days
+                changed_fields.append("working_days")
+            if p.vacation_days_taken != inputs.vacation_days_taken:
+                p.vacation_days_taken = inputs.vacation_days_taken
+                changed_fields.append("vacation_days_taken")
+            if Decimal(p.bonus_total) != inputs.bonus_total:
+                p.bonus_total = inputs.bonus_total
+                changed_fields.append("bonus_total")
+
+            if p.paid_salary != computed:
+                p.paid_salary = computed
+                changed_fields.append("paid_salary")
+
+            if changed_fields:
+                p.full_clean()
+                p.save(update_fields=changed_fields + ["updated_at"])
+                updated += 1
+                results.append({
+                    "user_id": user.id,
+                    "status": "updated",
+                    "paid_salary": str(computed)
+                })
+            else:
+                results.append({
+                    "user_id": user.id,
+                    "status": "ok",
+                    "paid_salary": str(computed)
+                })
+
+        processed += 1
+
+    count_db = PayrollPeriod.objects.filter(user__manager=manager, user__active=True, period=period_start).count()
 
     return {
         "period": str(period_start),
         "manager_id": manager.id,
+        "created": created,
         "updated": updated,
+        "processed": processed,
         "skipped_no_contract": skipped_no_contract,
-        "count": qs.count(),
+        "count": count_db,
         "results": results,
     }
 
 
 def get_export_dir_for(kind: str) -> Path:
-    base_dir = Path(getattr(settings, "EXPORT_DIR", getattr(settings, "MEDIA_ROOT")))
-    return base_dir / (CSV_SUBDIR if kind == "CSV" else PDF_SUBDIR)
-
+    base = Path(getattr(settings, "MEDIA_ROOT", "media")) / "exports" / kind.upper()
+    base.mkdir(parents=True, exist_ok=True)
+    return base
 
 def get_manager_payroll_qs(manager: User, period_start: date):
     return (

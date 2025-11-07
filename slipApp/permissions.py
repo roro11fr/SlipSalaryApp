@@ -2,5 +2,7 @@ from rest_framework.permissions import BasePermission
 
 class IsManager(BasePermission):
     def has_permission(self, request, view):
-        user = request.user
-        return bool(user and user.is_authenticated and getattr(user, "role", None) == "MANAGER")
+        u = getattr(request, "user", None)
+        return bool(
+            u and u.is_authenticated and getattr(u, "role", None) == "MANAGER" and getattr(u, "active", True)
+        )

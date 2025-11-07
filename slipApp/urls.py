@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, ContractViewSet, PayrollPeriodViewSet, AuditFileViewSet
+from .views import UserViewSet, ContractViewSet, PayrollPeriodViewSet, AuditFileViewSet, LogoutView
 from .views_aggregate import (
     CreateAggregatedEmployeeDataView,
     SendAggregatedEmployeeDataView,
@@ -11,7 +11,7 @@ from .views_aggregate import (
 router = DefaultRouter()
 router.register(r"users", UserViewSet, basename="users")
 router.register(r"contracts", ContractViewSet, basename="contracts")
-router.register(r"payroll", PayrollPeriodViewSet, basename="payroll")
+router.register(r'payroll', PayrollPeriodViewSet, basename='payroll')
 router.register(r"audit-files", AuditFileViewSet, basename="audit-files")
 
 urlpatterns = [
@@ -20,4 +20,5 @@ urlpatterns = [
     path("sendAggregatedEmployeeData", SendAggregatedEmployeeDataView.as_view()),
     path("createPdfForEmployees", CreatePdfForEmployeesView.as_view()),
     path("sendPdfToEmployees", SendPdfToEmployeesView.as_view()),
+    path("auth/logout/", LogoutView.as_view(), name="logout"),
 ]
