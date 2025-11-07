@@ -161,8 +161,27 @@ MIDDLEWARE += ["slipApp.middleware.RequestLogMiddleware"]
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {"requestlog": {"handlers": ["console"], "level": "INFO"}},
+    "formatters": {
+        "default": {
+            "format": "[{asctime}] {levelname} in {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": os.path.join(BASE_DIR, "app.log"),
+            "formatter": "default",
+        },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+        },
+    },
+    "root": {
+        "handlers": ["console", "file"],
+        "level": "INFO",
+    },
 }
 
 from datetime import timedelta
